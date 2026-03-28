@@ -2,7 +2,7 @@
 TODO: Implement the training loop for representation learning using our TRI data format. This will involve writing a new dataloader to read our TRI data, and then modifying the training loop to use this dataloader. The training loop should be designed to learn good representations from the TRI data, which can then be used for downstream tasks.
 
 How to modify:
-  Refer to train_representation.py to construct your workspace. You may need to modify the dataset-related code and the train method to properly iterate your dataset. 
+  Refer to train_representation.py to construct your workspace. You may need to modify the dataset-related code and the train method to properly iterate your dataset.
 """
 
 import warnings
@@ -230,7 +230,7 @@ class Workspace:
             print("No global step found")
 
 
-@hydra.main(config_path="cfgs", config_name="config_rep")
+@hydra.main(config_path="cfgs", config_name="TRI_config_rep")
 def main(cfg):
     from TRI_train_representation import Workspace as W
 

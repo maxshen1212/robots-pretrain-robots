@@ -1,8 +1,8 @@
 """
-TODO: Implement the training loop for representation learning using our TRI data format. This will involve writing a new dataloader to read our TRI data, and then modifying the training loop to use this dataloader. The training loop should be designed to learn good representations from the TRI data, which can then be used for downstream tasks.
+Training loop for VisualEncoder representation learning using EPIC HDF5 data.
 
-How to modify:
-  Refer to train_representation.py to construct your workspace. You may need to modify the dataset-related code and the train method to properly iterate your dataset.
+Uses BaseBufferEpicH5 dataloader with 10-element tuples and a Masked BC
+auxiliary loss computed in TRI_trainer.Trainer.
 """
 
 import warnings
@@ -21,8 +21,8 @@ import hydra
 import numpy as np
 import torch
 from mcr.utils import utils
-from mcr.trainer import Trainer
-from mcr.utils.data_loaders import MCRBuffer, MCRBufferDroid
+from mcr.TRI_trainer import Trainer
+from mcr.utils.TRI_data_loader import BaseBufferEpicH5
 from mcr.utils.logger import Logger
 import time
 
@@ -30,10 +30,10 @@ torch.backends.cudnn.benchmark = True
 
 
 def make_network(cfg):
-    model = hydra.utils.instantiate(cfg)  # mcr.MCR
+    model = hydra.utils.instantiate(cfg)
     print("Let's use", torch.cuda.device_count(), "GPUs!")
     model = torch.nn.DataParallel(model)
-    return model.cuda()
+    return model
 
 
 class Workspace:
@@ -47,61 +47,23 @@ class Workspace:
         self.setup()
 
         print("Creating Dataloader")
-        if self.cfg.dataset == "ego4d":
-            sources = ["ego4d"]
-        elif self.cfg.dataset == "droid":
-            sources = ["droid"]
-        else:
-            raise NameError("Invalid Dataset")
-
-        if self.cfg.dataset == "ego4d":
-            train_iterable = MCRBuffer(
-                self.cfg.datapath,
-                self.cfg.num_workers,
-                "train",
-                "train",
-                alpha=self.cfg.alpha,
-                datasources=sources,
+        if self.cfg.dataset == "epic":
+            train_iterable = BaseBufferEpicH5(
+                dataset_path=self.cfg.datapath,
+                num_workers=self.cfg.num_workers,
+                split="train",
+                datasources=["epic"],
                 doaug=self.cfg.doaug,
             )
-            val_iterable = MCRBuffer(
-                self.cfg.datapath,
-                self.cfg.num_workers,
-                "val",
-                "validation",
-                alpha=0,
-                datasources=sources,
-                doaug=0,
-            )
-        elif self.cfg.dataset == "droid":
-            train_iterable = MCRBufferDroid(
-                self.cfg.datapath,
-                self.cfg.num_workers,
-                "train",
-                "train",
-                alpha=self.cfg.alpha,
-                datasources=sources,
+            val_iterable = BaseBufferEpicH5(
+                dataset_path=self.cfg.datapath,
+                num_workers=self.cfg.num_workers,
+                split="val",
+                datasources=["epic"],
                 doaug=self.cfg.doaug,
-                state_list_used=self.cfg.agent.state_list,
-                state_window=self.cfg.agent.state_window,
-                use_action=self.cfg.agent.use_action,
-                view_keys_used=self.cfg.view_list,
-            )
-            val_iterable = MCRBufferDroid(
-                self.cfg.datapath,
-                self.cfg.num_workers,
-                "val",
-                "validation",
-                alpha=0,
-                datasources=sources,
-                doaug=self.cfg.doaug + "_eval",
-                state_list_used=self.cfg.agent.state_list,
-                state_window=self.cfg.agent.state_window,
-                use_action=self.cfg.agent.use_action,
-                view_keys_used=self.cfg.view_list,
             )
         else:
-            raise NameError("Invalid Dataset")
+            raise NameError(f"Invalid Dataset: {self.cfg.dataset}")
 
         self.train_loader = iter(
             torch.utils.data.DataLoader(
@@ -122,7 +84,7 @@ class Workspace:
 
         ## Init Model
         print("Initializing Model")
-        self.model = make_network(cfg.agent)
+        self.model = make_network(cfg.agent).to(self.device)
 
         self.timer = utils.Timer()
         self._global_step = 0
@@ -144,36 +106,43 @@ class Workspace:
     def global_frame(self):
         return self.global_step
 
+    def _unpack_batch(self, loader):
+        """Unpack 10-element batch from BaseBufferEpicH5 and move to GPU."""
+        (
+            batch_im, batch_lang, batch_state, batch_actions,
+            batch_mask_l, batch_mask_r,
+            batch_contact_l, batch_contact_r,
+            batch_obj_l, batch_obj_r,
+        ) = next(loader)
+        return (
+            batch_im.to(self.device),
+            batch_lang.to(self.device),
+            batch_state.to(self.device),
+            batch_actions.to(self.device),
+            batch_mask_l.to(self.device),
+            batch_mask_r.to(self.device),
+            batch_contact_l.to(self.device),
+            batch_contact_r.to(self.device),
+            batch_obj_l.to(self.device),
+            batch_obj_r.to(self.device),
+        )
+
     def train(self):
         # predicates
         train_until_step = utils.Until(self.cfg.train_steps, 1)
         eval_freq = self.cfg.eval_freq
         eval_every_step = utils.Every(eval_freq, 1)
         trainer = Trainer(eval_freq)
-
-        ## Training Loop
+        # Training Loop
         print("Begin Training")
         while train_until_step(self.global_step):
-            ## Sample Batch
+            # Sample Batch
             t0 = time.time()
-            (
-                batch_f,
-                batch_langs,
-                batch_states,
-                batch_full_statewind,
-                batch_actions,
-            ) = next(self.train_loader)
+            batch = self._unpack_batch(self.train_loader)
             t1 = time.time()
+
             metrics, st = trainer.update(
-                self.model,
-                (
-                    batch_f.cuda(),
-                    batch_langs,
-                    batch_states.to(self.device),
-                    batch_full_statewind,
-                    batch_actions.to(self.device),
-                ),
-                self.global_step,
+                self.model, batch, self.global_step
             )
             t2 = time.time()
             self.logger.log_metrics(metrics, self.global_frame, ty="train")
@@ -185,24 +154,9 @@ class Workspace:
 
             if eval_every_step(self.global_step):
                 with torch.no_grad():
-                    (
-                        batch_f,
-                        batch_langs,
-                        batch_states,
-                        batch_full_statewind,
-                        batch_actions,
-                    ) = next(self.val_loader)
+                    batch = self._unpack_batch(self.val_loader)
                     metrics, st = trainer.update(
-                        self.model,
-                        (
-                            batch_f.cuda(),
-                            batch_langs,
-                            batch_states.to(self.device),
-                            batch_full_statewind,
-                            batch_actions.to(self.device),
-                        ),
-                        self.global_step,
-                        eval=True,
+                        self.model, batch, self.global_step, eval=True
                     )
                     self.logger.log_metrics(
                         metrics, self.global_frame, ty="eval"
@@ -213,7 +167,7 @@ class Workspace:
             self._global_step += 1
 
     def save_snapshot(self):
-        snapshot = self.work_dir / f"snapshot_{self.global_step}.pt"
+        snapshot = self.work_dir / f"/snapshot_{self.global_step}.pt"
         global_snapshot = self.work_dir / f"snapshot.pt"
         sdict = {}
         sdict["mcr"] = self.model.state_dict()

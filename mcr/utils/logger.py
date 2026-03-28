@@ -10,6 +10,7 @@ import numpy as np
 import torch
 import torchvision
 import wandb
+from omegaconf import OmegaConf
 
 COMMON_TRAIN_FORMAT = [('frame', 'F', 'int'), ('step', 'S', 'int'),
                        ('episode', 'E', 'int'), ('episode_length', 'L', 'int'),
@@ -135,8 +136,8 @@ class Logger(object):
         elif cfg.use_wandb:
             print(cfg.wandbuser)
             wandb.init(project=cfg.wandbproject, entity=cfg.wandbuser, name=cfg.experiment)
-            fullcfg = {**cfg, **cfg.agent}
-            wandb.config.update(fullcfg)
+            flat_cfg = OmegaConf.to_container(cfg, resolve=True, throw_on_missing=False)
+            wandb.config.update(flat_cfg)
 
     def _try_sw_log(self, key, value, step):
         if self.use_tb:

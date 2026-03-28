@@ -4,6 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 import torch
 from mcr.models.models_mcr import MCR
+from mcr.models.TRI_visual_encoder import VisualEncoder
 
 VALID_ARGS = ["_target_", "device", "lr", "hidden_dim", "size", "l2weight", "l1weight", "langweight", "tcnweight", "l2dist", "bs"]
 if torch.cuda.is_available():

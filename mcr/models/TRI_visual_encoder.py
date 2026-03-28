@@ -14,19 +14,19 @@ Key Features:
 Code based on https://github.com/luccachiang/robots-pretrain-robots/tree/main
 """
 
-import numpy as np
-from numpy.core.numeric import full
+# import numpy as np
+# from numpy.core.numeric import full
 import torch
 import torch.nn as nn
 from torch.nn.modules.activation import Sigmoid
 from torch.nn.modules.linear import Identity
 import torchvision
 from torchvision import transforms
-from visual_encoder import utils
-from pathlib import Path
-from torchvision.utils import save_image
-import torchvision.transforms as T
-import torch.nn.functional as F
+# from visual_encoder import utils
+# from pathlib import Path
+# from torchvision.utils import save_image
+# import torchvision.transforms as T
+# import torch.nn.functional as F
 
 # Small epsilon value to prevent division by zero
 epsilon = 1e-8

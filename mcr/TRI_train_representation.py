@@ -167,7 +167,7 @@ class Workspace:
             self._global_step += 1
 
     def save_snapshot(self):
-        snapshot = self.work_dir / f"/snapshot_{self.global_step}.pt"
+        snapshot = self.work_dir / f"snapshot_{self.global_step}.pt"
         global_snapshot = self.work_dir / f"snapshot.pt"
         sdict = {}
         sdict["mcr"] = self.model.state_dict()

@@ -27,5 +27,7 @@ setup(
         'omegaconf>=2.1.1',
         'hydra-core>=1.1.1',
         'pillow>=9.0.1',
+        'timm>=0.9.0',
+        'huggingface_hub>=0.20.0,<1.0',
     ],
 )

@@ -581,6 +581,9 @@ class BaseBufferEpicH5(IterableDataset):
         all_actions = np.concatenate(all_actions, axis=0)
         mean = np.mean(all_actions, axis=0)
         std = np.std(all_actions, axis=0)
+        # Avoid div-by-zero / NaN when a dimension is constant or all-NaN
+        std = np.nan_to_num(std, nan=1.0, posinf=1.0, neginf=1.0)
+        std = np.maximum(std, 1e-8)
         return mean, std
 
     def _get_contact_left_mask(self, f):

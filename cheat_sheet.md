@@ -1,17 +1,14 @@
-# MCR
-# TODO: change the parameters
-# Refer to train_mcr.sh to launch the training and override hyper-paremeters.
+# MCR representation learning: training
 
 ```bash
+pip install 'huggingface_hub>=0.20,<1.0' timm
 cd /data/maxshen/robots-pretrain-robots/mcr
-
-export WANDB_API_KEY="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"
 
 CUDA_VISIBLE_DEVICES=2 python TRI_train_representation.py \
     hydra/launcher=local \
     hydra/output=local \
     datapath=/data/maxshen/phantom/data/processed/PutKiwiInCenterOfTable/tri_2d_lang.h5 \
-    doaug=resize \
+    doaug=resize_vit \
     batch_size=4 \
     train_steps=500 \
     eval_freq=100 \

@@ -22,6 +22,6 @@ CUDA_VISIBLE_DEVICES=2 python TRI_train_representation.py \
     experiment=tri_visual_encoder \
     use_wandb=false \
     wandbuser=chihhans-usc \
-    wandbproject=masquerade-pretrain \
+    wandbproject=SLURM_RPR \
     load_snap=""
 ```

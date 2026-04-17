@@ -12,6 +12,8 @@ import torchvision
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 import os
+import threading
+from huggingface_hub import HfApi
 
 os.environ["MKL_SERVICE_FORCE_INTEL"] = "1"
 os.environ["MUJOCO_GL"] = "egl"
@@ -174,6 +176,7 @@ class Workspace:
         torch.save(sdict, snapshot)
         sdict["global_step"] = self._global_step
         torch.save(sdict, global_snapshot)
+        self.upload_to_hf_background(snapshot, self.global_step)
 
     def load_snapshot(self, snapshot_path):
         payload = torch.load(snapshot_path)
@@ -182,6 +185,27 @@ class Workspace:
             self._global_step = payload["global_step"]
         except:
             print("No global step found")
+
+    def upload_to_hf_background(self, local_path, step_num):
+        def _upload():
+            try:
+                api = HfApi()
+                # !!! make sure you have already created the repo on Hugging Face
+                repo_id = "CHIH-HAN/tri-visual-encoder-all-human-data"
+
+                print(f"[HF] start uploading step {step_num} to {repo_id}...")
+                api.upload_file(
+                    path_or_fileobj=str(local_path), # convert Path to string
+                    path_in_repo=f"checkpoints/snapshot_{step_num}.pt",
+                    repo_id=repo_id,
+                    repo_type="model"
+                )
+                print(f"[HF] Step {step_num} uploaded successfully!")
+            except Exception as e:
+                print(f"[HF] upload failed: {e}")
+
+        # start background thread (Thread)，so the main program can continue to run the next batch
+        threading.Thread(target=_upload).start()
 
 
 @hydra.main(config_path="cfgs", config_name="TRI_config_rep")
